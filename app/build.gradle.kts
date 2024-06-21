@@ -72,4 +72,6 @@ dependencies {
 
     implementation(libs.gson.converter)
     implementation(libs.datastore.save)
+    implementation(libs.compose.lifecycle.state)
+
 }

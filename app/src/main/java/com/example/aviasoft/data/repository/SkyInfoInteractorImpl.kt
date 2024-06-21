@@ -1,8 +1,9 @@
 package com.example.aviasoft.data.repository
 
 import android.util.Log
+import com.example.aviasoft.data.mapper.toAttendant
 import com.example.aviasoft.data.network.client.SkyInfoClient
-import com.example.aviasoft.data.network.dto.Attendants
+import com.example.aviasoft.data.network.dto.AttendantsDto
 import com.example.aviasoft.data.network.dto.Barcodes
 import com.example.aviasoft.data.network.dto.Configuration
 import com.example.aviasoft.data.network.dto.Currency
@@ -11,9 +12,10 @@ import com.example.aviasoft.data.network.dto.Merchant
 import com.example.aviasoft.data.network.dto.Plane
 import com.example.aviasoft.data.network.dto.Row
 import com.example.aviasoft.data.network.dto.Seat
+import com.example.aviasoft.data.network.dto.trips.Trip
 import com.example.aviasoft.data.persistence.db.DatabaseManager
 import com.example.aviasoft.data.persistence.pref.PreferenceManager
-import com.example.aviasoft.domain.respositotory.SkyInfoInteractor
+import com.example.aviasoft.domain.respositotory.SkyInfoRepository
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import org.json.JSONObject
@@ -22,32 +24,46 @@ class SkyInfoInteractorImpl(
     private val skyInfoClient: SkyInfoClient,
     private val databaseManager: DatabaseManager,
     private val preferenceManager: PreferenceManager
-) : SkyInfoInteractor {
+) : SkyInfoRepository {
 
-    override suspend fun retrievingSkyInfo() {
+    override suspend fun retrievingAttendantsList() =
+        databaseManager.retrievingAttendants().map { it.toAttendant() }
 
+    override suspend fun downloadingSkyInfo() {
+
+        //As the api documentation is not provided, I am expecting all properties is not null
         getConfig()
         gettingCurrencies()
-        getTripsShow() // in progress
+        getTripsShow()
         getDiscounts()
         getSeatMap()
         //getGoodsTaxes is null
         gettingMerchants()
         //getTblPaginated no need
-        gettingDicts()
         gettingPlanes()
         gettingBarcodes()
 
     }
 
+    override suspend fun downloadAttendants() {
+        gettingDicts()
+    }
+
     private suspend fun getTripsShow() {
         skyInfoClient.makePostNetworkCall(
-            methodName = "",
+            methodName = "trips.show",
             requestParam = hashMapOf(
-
+                "company" to "wa",
+                "id" to "10"
             )
-        )?.let {
+        )?.let { result ->
+            val data =
+                JSONObject(result).getJSONObject("result").getJSONObject("data")
+            val type = object : TypeToken<Trip>() {}.type
 
+            val trip = Gson().fromJson<Trip>(data.toString(), type)
+            Log.d("slkfjd23ds", "getting trip: $trip")
+            databaseManager.insertTrip(trip)
         }
     }
 
@@ -154,9 +170,9 @@ class SkyInfoInteractorImpl(
         )?.let { result ->
             val data = JSONObject(result).getJSONObject("result").getJSONObject("data")
                 .getJSONArray("getAttendants")
-            val type = object : TypeToken<List<Attendants>>() {}.type
+            val type = object : TypeToken<List<AttendantsDto>>() {}.type
 
-            val attendants = Gson().fromJson<List<Attendants>>(data.toString(), type)
+            val attendants = Gson().fromJson<List<AttendantsDto>>(data.toString(), type)
 
             Log.d("4dlfj232", "Attendants List : ${attendants.toList()}")
             databaseManager.insertAttendants(attendants)

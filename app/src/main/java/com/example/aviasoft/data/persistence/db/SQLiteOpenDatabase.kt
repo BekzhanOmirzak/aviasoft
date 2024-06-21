@@ -4,15 +4,15 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import com.example.aviasoft.data.network.dto.Attendants
+import com.example.aviasoft.data.network.dto.AttendantsDto
 import com.example.aviasoft.data.network.dto.Barcodes
 import com.example.aviasoft.data.network.dto.Currency
 import com.example.aviasoft.data.network.dto.Discount
 import com.example.aviasoft.data.network.dto.Merchant
 import com.example.aviasoft.data.network.dto.Plane
 import com.example.aviasoft.data.network.dto.Seat
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.example.aviasoft.data.network.dto.trips.Trip
+import com.example.aviasoft.domain.model.Attendant
 
 class SQLiteOpenDatabase(
     context: Context
@@ -303,17 +303,7 @@ class SQLiteOpenDatabase(
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        //need to write migration queries if needed
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_BARCODES")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_ATTENDANTS")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_CURRENCY")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_MERCHANT")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_DISCOUNTS")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_DISCOUNTS_CATEGORIES")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_DISCOUNTS_GOODS")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_PLANES")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_SEATS")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_ROWS")
+//        //need to write migration queries if needed
         onCreate(db)
     }
 
@@ -401,7 +391,7 @@ class SQLiteOpenDatabase(
         }
     }
 
-    override suspend fun insertAttendants(list: List<Attendants>) {
+    override suspend fun insertAttendants(list: List<AttendantsDto>) {
         val db = writableDatabase
         db.beginTransaction()
         try {
@@ -542,6 +532,307 @@ class SQLiteOpenDatabase(
                 SQLiteDatabase.CONFLICT_REPLACE
             )
         }
+    }
+
+    override suspend fun insertTrip(trip: Trip) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            // Insert Trip data
+            val tripValues = ContentValues().apply {
+                put(COLUMN_TRIP_ID, trip.id)
+                put(COLUMN_TRIP_AIRPLANE_ID, trip.airplane_id)
+                put(COLUMN_TRIP_CASH_ALLOWED, trip.cash_allowed)
+                put(COLUMN_TRIP_SERVER_TIME, trip.server_time)
+                put(COLUMN_TRIP_STATUS, trip.status)
+                put(COLUMN_TRIP_TROLLEYS_COUNT, trip.trolleys_count)
+                // Add other columns as needed
+            }
+            db.insertWithOnConflict(TABLE_TRIPS, null, tripValues, SQLiteDatabase.CONFLICT_REPLACE)
+
+            // Insert Bags
+            for (bag in trip.bags) {
+                val bagValues = ContentValues().apply {
+                    put(COLUMN_BAG_ID, bag.id)
+                    put(COLUMN_BAG_CAPACITY, bag.capacity)
+                    put(COLUMN_BAG_CODE, bag.code)
+                    put(COLUMN_BAG_STATUS, bag.status)
+                    put(COLUMN_BAG_TRIP_ID, trip.id) // Use trip.id to link to the trip
+                    // Add other columns as needed
+                }
+                db.insertWithOnConflict(
+                    TABLE_BAGS,
+                    null,
+                    bagValues,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+
+            // Insert Goods
+            for (good in trip.goods) {
+                val goodValues = ContentValues().apply {
+                    put(COLUMN_GOODS_ID, good.id)
+                    put(COLUMN_GOOD_CATEGORY, good.category)
+                    put(COLUMN_GOOD_CATEGORY_ID, good.category_id)
+                    put(COLUMN_GOOD_IMAGE_CODE, good.image_code)
+                    put(COLUMN_GOOD_IMAGE_ID, good.image_id)
+                    put(COLUMN_GOOD_IS_HIDDEN, good.is_hidden)
+                    put(COLUMN_GOOD_MERCHANT_ID, good.merchant_id)
+                    put(COLUMN_GOOD_PRODUCT_ID, good.product_id)
+                    put(COLUMN_GOOD_TAG_ID, good.tag_id)
+                    put(COLUMN_GOOD_TITLE, good.title)
+                    // Add other columns as needed
+                }
+                db.insertWithOnConflict(
+                    TABLE_GOODS,
+                    null,
+                    goodValues,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+
+                // Insert Current Prices
+                for (currentPrice in good.current_prices) {
+                    val priceValues = ContentValues().apply {
+                        put(COLUMN_CURRENT_PRICE_ID, currentPrice.id)
+                        put(
+                            COLUMN_CURRENT_PRICE_GOOD_ID,
+                            good.id
+                        ) // Use good.id to link to the good
+                        put(COLUMN_CURRENT_PRICE, currentPrice.price)
+                        put(COLUMN_CURRENT_PRICE_CURRENCY_ID, currentPrice.currency_id)
+                        put(COLUMN_CURRENT_PRICE_PTYPE, currentPrice.ptype)
+                        put(COLUMN_CURRENT_PRICE_TYPE, currentPrice.type)
+                        // Add other columns as needed
+                    }
+                    db.insertWithOnConflict(
+                        TABLE_CURRENT_PRICES,
+                        null,
+                        priceValues,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                    )
+                }
+            }
+
+            // Insert Legs
+            for (leg in trip.legs) {
+                val legValues = ContentValues().apply {
+                    put(COLUMN_LEG_ID, leg.id)
+                    put(COLUMN_LEG_AIRPLANE_ID, leg.airplane_id)
+                    put(COLUMN_LEG_ARRIVAL, leg.arrival)
+                    put(COLUMN_LEG_DEPARTURE, leg.departure)
+                    put(COLUMN_LEG_FISCAL_MACHINE_ID, leg.fiscal_machine_id)
+                    put(COLUMN_LEG_FLIGHT_ID, leg.flight_id)
+                    put(COLUMN_LEG_REL_TITLE, leg.rel_title)
+                    put(COLUMN_LEG_TRIP_ID, trip.id) // Use trip.id to link to the trip
+                    // Add other columns as needed
+                }
+                db.insertWithOnConflict(
+                    TABLE_LEGS,
+                    null,
+                    legValues,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+
+                // Insert Fiscal Machine
+                val fiscalMachineValues = ContentValues().apply {
+                    put(COLUMN_FISCAL_MACHINE_ID, leg.fiscal_machine.id)
+                    put(COLUMN_FISCAL_MACHINE_ABOVE_QR, leg.fiscal_machine.above_qr)
+                    put(COLUMN_FISCAL_MACHINE_BELOW_QR, leg.fiscal_machine.below_qr)
+                    put(COLUMN_FISCAL_MACHINE_ADDRESS, leg.fiscal_machine.address)
+                    put(COLUMN_FISCAL_MACHINE_BIN, leg.fiscal_machine.bin)
+                    put(COLUMN_FISCAL_MACHINE_IDENTITY_NUMBER, leg.fiscal_machine.identity_number)
+                    put(
+                        COLUMN_FISCAL_MACHINE_REGISTRATION_NUMBER,
+                        leg.fiscal_machine.registration_number
+                    )
+                    put(COLUMN_FISCAL_MACHINE_TITLE, leg.fiscal_machine.title)
+                    // Add other columns as needed
+                }
+                db.insertWithOnConflict(
+                    TABLE_FISCAL_MACHINES,
+                    null,
+                    fiscalMachineValues,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+
+                // Insert Flight
+                val flightValues = ContentValues().apply {
+                    put(COLUMN_FLIGHT_ID, leg.flight.id)
+                    put(COLUMN_FLIGHT_ARRIVAL, leg.flight.arrival)
+                    put(COLUMN_FLIGHT_CATEGORY, leg.flight.category)
+                    put(COLUMN_FLIGHT_CODE, leg.flight.code)
+                    put(COLUMN_FLIGHT_DEPARTURE, leg.flight.departure)
+                    put(COLUMN_FLIGHT_REL_TITLE, leg.flight.rel_title)
+                    // Add other columns as needed
+                }
+                db.insertWithOnConflict(
+                    TABLE_FLIGHTS,
+                    null,
+                    flightValues,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+
+                // Insert Taxes
+                for (tax in leg.flight.taxes) {
+                    val taxValues = ContentValues().apply {
+                        put(COLUMN_TAX_ID, tax.id)
+                        put(
+                            COLUMN_TAX_FLIGHT_ID,
+                            leg.flight.id
+                        ) // Use leg.flight.id to link to the flight
+                        put(COLUMN_TAX_PERCENT, tax.percent)
+                        put(COLUMN_TAX_TITLE, tax.title)
+                        // Add other columns as needed
+                    }
+                    db.insertWithOnConflict(
+                        TABLE_TAXES,
+                        null,
+                        taxValues,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                    )
+                }
+
+                // Insert Modifiers
+                for (modifier in leg.modifiers) {
+                    val modifierValues = ContentValues().apply {
+                        put(COLUMN_MODIFIER_ID, modifier.id)
+                        put(COLUMN_MODIFIER_FLIGHT_ID, modifier.flight_id)
+                        put(COLUMN_MODIFIER_GOOD_ID, modifier.good_id)
+                        put(COLUMN_MODIFICATOR, modifier.modificator)
+                        // Add other columns as needed
+                    }
+                    db.insertWithOnConflict(
+                        TABLE_MODIFIERS,
+                        null,
+                        modifierValues,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                    )
+                }
+            }
+
+            // Insert TripsMoney
+            for (money in trip.trips_money) {
+                val moneyValues = ContentValues().apply {
+                    put(COLUMN_TRIPS_MONEY_ID, money.id)
+                    put(COLUMN_TRIPS_MONEY_AMOUNT, money.amount)
+                    put(COLUMN_TRIPS_MONEY_BAG_ID, money.bag_id)
+                    put(COLUMN_TRIPS_MONEY_CURRENCY_CODE, money.currency_code)
+                    put(COLUMN_TRIPS_MONEY_CURRENCY_ID, money.currency_id)
+                    put(COLUMN_TRIPS_MONEY_ISONUM, money.isonum)
+                    put(COLUMN_TRIPS_MONEY_POS_AVAILABLE, money.pos_available)
+                    put(COLUMN_TRIPS_MONEY_POS_STANDARD, money.pos_standard)
+                    put(COLUMN_TRIPS_MONEY_STANDARD, money.standard)
+                    put(COLUMN_TRIPS_MONEY_TITLE, money.title)
+                    // Add other columns as needed
+                }
+                db.insertWithOnConflict(
+                    TABLE_TRIPS_MONEY,
+                    null,
+                    moneyValues,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+
+            // Insert TripsPosTerminals
+            for (posTerminal in trip.trips_pos_terminals) {
+                val posTerminalValues = ContentValues().apply {
+                    put(COLUMN_TRIPS_POS_TERMINAL_ID, posTerminal.id)
+                    put(COLUMN_TRIPS_POS_TERMINAL_BAG_ID, posTerminal.bag_id)
+                    put(COLUMN_TRIPS_POS_TERMINAL_CODE, posTerminal.code)
+                    put(COLUMN_TRIPS_POS_TERMINAL_IP, posTerminal.ip)
+                    put(COLUMN_TRIPS_POS_TERMINAL_LASER, posTerminal.laser)
+                    put(COLUMN_TRIPS_POS_TERMINAL_MAC, posTerminal.mac)
+                    put(COLUMN_TRIPS_POS_TERMINAL_POS_TERMINAL_ID, posTerminal.pos_terminal_id)
+                    put(COLUMN_TRIPS_POS_TERMINAL_STATUS, posTerminal.status)
+                    put(
+                        COLUMN_TRIPS_POS_TERMINAL_TRIP_ID,
+                        trip.id
+                    ) // Use trip.id to link to the trip
+                    // Add other columns as needed
+                }
+                db.insertWithOnConflict(
+                    TABLE_TRIPS_POS_TERMINALS,
+                    null,
+                    posTerminalValues,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+
+            // Insert TripsProducts
+            for (product in trip.trips_products) {
+                val productValues = ContentValues().apply {
+                    put(COLUMN_TRIPS_PRODUCT_BARCODE, product.barcode)
+                    put(COLUMN_TRIPS_PRODUCT_CART_NUMBER, product.cart_number)
+                    put(COLUMN_TRIPS_PRODUCT_COST, product.cost)
+                    put(COLUMN_TRIPS_PRODUCT_IS_CONTROLLED, product.is_controlled)
+                    put(COLUMN_TRIPS_PRODUCT_IS_ENABLED, product.is_enabled)
+                    put(COLUMN_TRIPS_PRODUCT_PHYSICAL, product.physical)
+                    put(COLUMN_TRIPS_PRODUCT_PRODUCT_ID, product.product_id)
+                    put(COLUMN_TRIPS_PRODUCT_PRODUCT_TYPE, product.product_type)
+                    put(COLUMN_TRIPS_PRODUCT_QUANTITY, product.quantity)
+                    put(COLUMN_TRIPS_PRODUCT_TITLE, product.title)
+                    put(COLUMN_TRIPS_PRODUCT_TRAY_ID, product.tray_id)
+                    put(COLUMN_TRIPS_PRODUCT_TRAY_TITLE, product.tray_title)
+                    put(COLUMN_TRIPS_PRODUCT_TRIP_ID, trip.id) // Use trip.id to link to the trip
+                    put(COLUMN_TRIPS_PRODUCT_VOLUME, product.volume)
+                    put(COLUMN_TRIPS_PRODUCT_WEIGHT, product.weight)
+                    // Add other columns as needed
+                }
+                db.insertWithOnConflict(
+                    TABLE_TRIPS_PRODUCTS,
+                    null,
+                    productValues,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    override suspend fun retrievingAttendants(): List<AttendantsDto> {
+        val db = readableDatabase
+        val projection = arrayOf(
+            COLUMN_ATTENDANT_ID,
+            COLUMN_ATTENDANT_CODE,
+            COLUMN_ATTENDANT_NAME,
+            COLUMN_ATTENDANT_BASE_ID,
+            COLUMN_ATTENDANT_TYPE,
+            COLUMN_ATTENDANT_EMAIL,
+            COLUMN_ATTENDANT_LANGUAGE
+        )
+
+        val sortOrder = "$COLUMN_ATTENDANT_NAME ASC"
+
+        val cursor = db.query(
+            TABLE_ATTENDANTS,
+            projection,
+            null,
+            null,
+            null,
+            null,
+            sortOrder
+        )
+
+        val attendantsList = mutableListOf<AttendantsDto>()
+        cursor.use {
+            while (it.moveToNext()) {
+                val attendant = AttendantsDto(
+                    it.getString(it.getColumnIndexOrThrow(COLUMN_ATTENDANT_ID)),
+                    it.getString(it.getColumnIndexOrThrow(COLUMN_ATTENDANT_CODE)),
+                    it.getString(it.getColumnIndexOrThrow(COLUMN_ATTENDANT_NAME)),
+                    it.getString(it.getColumnIndexOrThrow(COLUMN_ATTENDANT_BASE_ID)),
+                    it.getString(it.getColumnIndexOrThrow(COLUMN_ATTENDANT_TYPE)),
+                    it.getString(it.getColumnIndexOrThrow(COLUMN_ATTENDANT_EMAIL)),
+                    it.getString(it.getColumnIndexOrThrow(COLUMN_ATTENDANT_LANGUAGE))
+                )
+                attendantsList.add(attendant)
+            }
+        }
+
+        return attendantsList
     }
 
     companion object {

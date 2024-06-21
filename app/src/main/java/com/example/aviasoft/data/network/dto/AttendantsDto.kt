@@ -2,7 +2,7 @@ package com.example.aviasoft.data.network.dto
 
 import com.google.gson.annotations.SerializedName
 
-data class Attendants(
+data class AttendantsDto(
     val id: String,
     val code: String,
     val name: String,
