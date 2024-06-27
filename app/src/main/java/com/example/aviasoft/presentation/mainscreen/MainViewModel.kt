@@ -25,7 +25,7 @@ class MainViewModel(
             skyInfoSaving.downloadingSkyInfo()
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO + handler) {
             skyInfoSaving.downloadAttendants()
             val result = attendantsUniqueName()
             _viewState.update { it.copy(attendantList = result) }
